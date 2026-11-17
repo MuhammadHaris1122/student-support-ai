@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Student Support Assistant</title>
+    <!-- Bootstrap 5 & FontAwesome for Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background-color: #f3f4f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; height: 100vh; overflow: hidden; }
+        .app-container { display: flex; height: 100vh; }
+        
+        /* Sidebar Styling */
+        .sidebar { width: 280px; background: #1f2937; color: #fff; display: flex; flex-direction: column; padding: 20px; }
+        .sidebar h4 { font-size: 1.1rem; font-weight: 600; margin-bottom: 25px; color: #9ca3af; }
+        .sidebar a { color: #d1d5db; text-decoration: none; padding: 10px 15px; border-radius: 8px; margin-bottom: 8px; transition: all 0.2s; display: flex; align-items: center; gap: 10px; }
+        .sidebar a:hover, .sidebar a.active { background: #374151; color: #fff; }
+        
+        /* Main Chat Area */
+        .chat-main { flex: 1; display: flex; flex-direction: column; background: #ffffff; }
+        .chat-header { padding: 15px 25px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; background: #fff; }
+        
+        .chat-box { flex: 1; overflow-y: auto; padding: 25px; display: flex; flex-direction: column; gap: 15px; background: #f9fafb; }
+        
+        /* Message Bubbles */
+        .message { max-width: 75%; padding: 12px 18px; border-radius: 15px; line-height: 1.5; font-size: 0.95rem; }
+        .msg-user { background: #2563eb; color: white; align-self: flex-end; border-bottom-right-radius: 2px; box-shadow: 0 2px 5px rgba(37, 99, 235, 0.2); }
+        .msg-ai { background: #ffffff; color: #1f2937; align-self: flex-start; border-bottom-left-radius: 2px; border: 1px solid #e5e7eb; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
+        
+        /* Input Area */
+        .chat-input-area { padding: 20px 25px; background: #fff; border-top: 1px solid #e5e7eb; }
+        .chat-input-box { display: flex; gap: 10px; background: #f3f4f6; padding: 8px 15px; border-radius: 12px; border: 1px solid #d1d5db; }
+        .chat-input-box input { border: none; background: transparent; flex: 1; outline: none; font-size: 0.95rem; }
+        .chat-input-box button { background: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 8px; transition: background 0.2s; }
+        .chat-input-box button:hover { background: #1d4ed8; }
+
+        /* Typing Indicator */
+        .typing-dots span { height: 7px; width: 7px; margin: 0 2px; background-color: #9ca3af; border-radius: 50%; display: inline-block; animation: bounce 1.3s infinite ease-in-out; }
+        .typing-dots span:nth-child(2) { animation-delay: -1.1s; }
+        .typing-dots span:nth-child(3) { animation-delay: -0.9s; }
+        @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+        <h4 class="text-uppercase tracking-wider"><i class="fa-solid fa-graduation-cap me-2"></i>Student Support</h4>
+        <div class="flex-grow-1">
+            <a href="/chat/" class="active"><i class="fa-solid fa-comments"></i> Chat Assistant</a>
+            <a href="/analytics/feedback/"><i class="fa-solid fa-pen-to-square"></i> Submit Feedback</a>
+            <a href="/admin/" target="_blank"><i class="fa-solid fa-shield-halved"></i> Admin Panel</a>
+        </div>
+        <div class="text-muted small text-center pt-3 border-top border-secondary">
+            <i class="fa-solid fa-circle text-success fs-6 me-1"></i> Groq AI Active
+        </div>
+    </div>
+
+    <!-- Main Chat Content -->
+    <div class="chat-main">
+        <div class="chat-header">
+            <h5 class="m-0 fw-bold text-dark"><i class="fa-solid fa-robot text-primary me-2"></i>AI Academic Assistant</h5>
+            <span class="badge bg-light text-dark border px-3 py-2 rounded-pill">Model: openai/gpt-oss-20b</span>
+        </div>
+
+        <div class="chat-box" id="chatBox">
+            <div class="message msg-ai">
+                <strong>Salam!</strong> Main aapka AI academic assistant hoon. Aapne jo training notes / roadmap upload kiye hain, un se mutaliq koi bhi sawal yahan poochein.
+            </div>
+        </div>
+
+        <div class="chat-input-area">
+            <form id="chatForm">
+                {% csrf_token %}
+                <div class="chat-input-box">
+                    <input type="text" id="questionInput" placeholder="Ask a question about your study materials..." required autocomplete="off">
+                    <button type="submit" id="sendBtn"><i class="fa-solid fa-paper-plane"></i></button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    const form = document.getElementById('chatForm');
+    const input = document.getElementById('questionInput');
+    const chatBox = document.getElementById('chatBox');
+    const sendBtn = document.getElementById('sendBtn');
+
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        const question = input.value.trim();
+        if(!question) return;
+
+        // Append user message
+        chatBox.innerHTML += `<div class="message msg-user">${escapeHtml(question)}</div>`;
+        input.value = '';
+        sendBtn.disabled = true;
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        // Append typing indicator
+        const typingId = 'typing-' + Date.now();
+        chatBox.innerHTML += `
+            <div class="message msg-ai" id="${typingId}">
+                <div class="typing-dots"><span></span><span></span><span></span></div>
+            </div>`;
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        const formData = new FormData();
+        formData.append('question', question);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        try {
+            const res = await fetch('/chat/api/ask/', { method: 'POST', body: formData });
+            const data = await res.json();
+            
+            // Remove typing indicator
+            document.getElementById(typingId).remove();
+
+            // Append AI response
+            const answerText = data.answer || data.error || "Something went wrong.";
+            chatBox.innerHTML += `<div class="message msg-ai">${escapeHtml(answerText)}</div>`;
+        } catch(err) {
+            document.getElementById(typingId).remove();
+            chatBox.innerHTML += `<div class="message msg-ai text-danger">Error retrieving response from server.</div>`;
+        }
+        
+        sendBtn.disabled = false;
+        chatBox.scrollTop = chatBox.scrollHeight;
+    };
+
+    function escapeHtml(text) {
+        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    }
+</script>
+</body>
+</html>
